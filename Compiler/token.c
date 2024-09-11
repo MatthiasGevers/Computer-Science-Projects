@@ -1,57 +1,22 @@
 /**
  * @file    token.c
  * @brief   Utility functions for AMPL-2023 tokens.
+ * @author  W.H.K. Bester (whkbester@cs.sun.ac.za)
+ * @date    2023-06-29
  */
 
+#include <assert.h>
 #include "token.h"
 
-#include <assert.h>
-
 /* the token strings */
-static char *token_names[] = {"end-of-file",
-                              "identifier",
-                              "numeric literal",
-                              "string literal",
-                              "'array'",
-                              "'bool'",
-                              "'chillax'",
-                              "'elif'",
-                              "'else'",
-                              "'end'",
-                              "'if'",
-                              "'input'",
-                              "'int'",
-                              "'let'",
-                              "'main'",
-                              "'output'",
-                              "'program'",
-                              "'return'",
-                              "'while'",
-                              "'false'",
-                              "'true'",
-                              "'not'",
-                              "'='",
-                              "'>='",
-                              "'>'",
-                              "'<='",
-                              "'<'",
-                              "'/='",
-                              "'-'",
-                              "'or'",
-                              "'+'",
-                              "'and'",
-                              "'/'",
-                              "'*'",
-                              "'rem'",
-                              "'->'",
-                              "':'",
-                              "','",
-                              "'..'",
-                              "'['",
-                              "'('",
-                              "']'",
-                              "')'",
-                              "';'"};
+static char *token_names[] = {
+	"end-of-file", "identifier", "numeric literal", "string literal", "'array'",
+	"'bool'", "'chillax'", "'elif'", "'else'", "'end'", "'if'", "'input'",
+	"'int'", "'let'", "'main'", "'output'", "'program'", "'return'", "'while'",
+	"'false'", "'true'", "'not'", "'='", "'>='", "'>'", "'<='", "'<'", "'/='",
+	"'-'", "'or'", "'+'", "'and'", "'/'", "'*'", "'rem'", "'->'", "':'", "','",
+	"'..'", "'['", "'('", "']'", "')'", "';'"
+};
 
 /* --- functions ------------------------------------------------------------ */
 

@@ -12,6 +12,8 @@
  * Brian W. Kernighan and Rob Pike, and they are copyright (C) 1999 Lucent
  * Technologies.
  *
+ * @author  W.H.K. Bester (whkbester@cs.sun.ac.za)
+ * @date    2023-06-29
  */
 
 #ifndef ERROR_H
@@ -21,8 +23,8 @@
 
 /** a place (position) in the source file */
 typedef struct {
-	int line; /**< the line number   */
-	int col;  /**< the column number */
+	int line;  /**< the line number   */
+	int col;   /**< the column number */
 } SourcePos;
 
 extern SourcePos position;

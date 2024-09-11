@@ -1,3 +1,9 @@
+/**
+ * @file    boolean.h
+ * @brief   Boolean data type definitions.
+ * @author  W.H.K. Bester (whkbester@cs.sun.ac.za)
+ * @date    2023-08-03
+ */
 
 #ifndef BOOLEAN_H
 #define BOOLEAN_H

@@ -1,6 +1,8 @@
 /**
  * @file    codegen.c
  * @brief   The code generator for AMPL-2023.
+ * @author  W.H.K. Bester (whkbester@cs.sun.ac.za)
+ * @date    2023-08-03
  */
 
 #include <assert.h>
@@ -18,193 +20,170 @@
 /* --- type definitions and constants --------------------------------------- */
 
 typedef enum {
-	CODE_LABEL       = 0x0001,
+	CODE_LABEL		 = 0x0001,
 	CODE_INSTRUCTION = 0x0002,
-	CODE_OPERAND     = 0x0004,
-	MASK_TYPE        = 0x000f,
-	CODE_INTEGER     = 0x0010,
-	CODE_ARRAY_TYPE  = 0x0020,
-	CODE_STRING      = 0x0040,
-	CODE_REFERENCE   = 0x0080,
-	MASK_DATA_TYPE   = 0x00f0,
-	CODE_ALLOCATED   = 0x0100,
-	MASK_ALLOCATION  = 0x0f00
+	CODE_OPERAND	 = 0x0004,
+	MASK_TYPE		 = 0x000f,
+	CODE_INTEGER	 = 0x0010,
+	CODE_ARRAY_TYPE	 = 0x0020,
+	CODE_STRING		 = 0x0040,
+	CODE_REFERENCE	 = 0x0080,
+	MASK_DATA_TYPE	 = 0x00f0,
+	CODE_ALLOCATED	 = 0x0100,
+	MASK_ALLOCATION	 = 0x0f00
 } CodeType;
 
 typedef struct {
 	const char *instr;
-	short       pop;
-	short       push;
+	short		pop;
+	short		push;
 } BC;
 
 typedef struct {
 	CodeType type;
 	union {
-		JVMatype  atype;
-		Bytecode  code;
-		Label     label;
-		int       num;
-		char     *string;
+		JVMatype atype;
+		Bytecode code;
+		Label	 label;
+		int		 num;
+		char	*string;
 	};
 } Code;
 
 typedef struct body_s Body;
 struct body_s {
-	char   *name;
+	char	*name;
 	IDPropt *idprop;
-	Code   *code;
-	int     ip;
-	int     max_stack_depth;
-	int     variables_width;
-	Body   *next;
-	Body   *prev;
+	Code	*code;
+	int		 ip;
+	int		 max_stack_depth;
+	int		 variables_width;
+	Body	*next;
+	Body	*prev;
 };
 
 /* --- Jasmin output string literals ---------------------------------------- */
 
-char class_preamble[] =
-	".class public %s\n"
-	".super java/lang/Object\n\n"
-	".field private static final charsetName Ljava/lang/String;\n"
-	".field private static final usLocale Ljava/util/Locale;\n"
-	".field private static final scanner Ljava/util/Scanner;\n\n"
-	".method static public <clinit>()V\n"
-	".limit stack 5\n"
-	".limit locals 1 \n"
-	"\tldc	\"UTF-8\"\n"
-	"\tputstatic %s/charsetName Ljava/lang/String;\n"
-	"\tnew	java/util/Locale\n"
-	"\tdup\n"
-	"\tldc	\"en\"\n"
-	"\tldc	\"US\"\n"
-	"\tinvokespecial "
-	"java/util/Locale/<init>(Ljava/lang/String;Ljava/lang/String;)V\n"
-	"\tputstatic %s/usLocale Ljava/util/Locale;\n"
-	"\tnew	java/util/Scanner\n"
-	"\tdup\n"
-	"\tnew	java/io/BufferedInputStream\n"
-	"\tdup\n"
-	"\tgetstatic java/lang/System/in Ljava/io/InputStream;\n"
-	"\tinvokespecial"
-	" java/io/BufferedInputStream/<init>(Ljava/io/InputStream;)V\n"
-	"\tgetstatic %s/charsetName Ljava/lang/String;\n"
-	"\tinvokespecial "
-	"java/util/Scanner/<init>(Ljava/io/InputStream;Ljava/lang/String;)V\n"
-	"\tputstatic %s/scanner Ljava/util/Scanner;\n"
-	"\tgetstatic %s/scanner Ljava/util/Scanner;\n"
-	"\tgetstatic %s/usLocale Ljava/util/Locale;\n"
-	"\tinvokevirtual"
-	" java/util/Scanner/useLocale(Ljava/util/Locale;)Ljava/util/Scanner;\n"
-	"\tpop\n"
-	"\treturn\n"
-	".end method\n\n";
+char class_preamble[]
+	= ".class public %s\n"
+	  ".super java/lang/Object\n\n"
+	  ".field private static final charsetName Ljava/lang/String;\n"
+	  ".field private static final usLocale Ljava/util/Locale;\n"
+	  ".field private static final scanner Ljava/util/Scanner;\n\n"
+	  ".method static public <clinit>()V\n"
+	  ".limit stack 5\n"
+	  ".limit locals 1 \n"
+	  "\tldc	\"UTF-8\"\n"
+	  "\tputstatic %s/charsetName Ljava/lang/String;\n"
+	  "\tnew	java/util/Locale\n"
+	  "\tdup\n"
+	  "\tldc	\"en\"\n"
+	  "\tldc	\"US\"\n"
+	  "\tinvokespecial "
+	  "java/util/Locale/<init>(Ljava/lang/String;Ljava/lang/String;)V\n"
+	  "\tputstatic %s/usLocale Ljava/util/Locale;\n"
+	  "\tnew	java/util/Scanner\n"
+	  "\tdup\n"
+	  "\tnew	java/io/BufferedInputStream\n"
+	  "\tdup\n"
+	  "\tgetstatic java/lang/System/in Ljava/io/InputStream;\n"
+	  "\tinvokespecial"
+	  " java/io/BufferedInputStream/<init>(Ljava/io/InputStream;)V\n"
+	  "\tgetstatic %s/charsetName Ljava/lang/String;\n"
+	  "\tinvokespecial "
+	  "java/util/Scanner/<init>(Ljava/io/InputStream;Ljava/lang/String;)V\n"
+	  "\tputstatic %s/scanner Ljava/util/Scanner;\n"
+	  "\tgetstatic %s/scanner Ljava/util/Scanner;\n"
+	  "\tgetstatic %s/usLocale Ljava/util/Locale;\n"
+	  "\tinvokevirtual"
+	  " java/util/Scanner/useLocale(Ljava/util/Locale;)Ljava/util/Scanner;\n"
+	  "\tpop\n"
+	  "\treturn\n"
+	  ".end method\n\n";
 
-char method_init[] =
-	".method public <init>()V\n"
-	"\taload_0\n"
-	"\tinvokespecial java/lang/Object/<init>()V\n"
-	"\treturn\n"
-	".end method\n\n";
+char method_init[]
+	= ".method public <init>()V\n"
+	  "\taload_0\n"
+	  "\tinvokespecial java/lang/Object/<init>()V\n"
+	  "\treturn\n"
+	  ".end method\n\n";
 
-char method_readBoolean[] =
-	".method public static readBoolean()Z\n"
-	".limit stack 2\n"
-	".limit locals 1\n"
-	"\tgetstatic %s/scanner Ljava/util/Scanner;\n"
-	"\tinvokevirtual java/util/Scanner/next()Ljava/lang/String;\n"
-	"\tastore 0\n"
-	"\taload 0\n"
-	"\tldc	\"true\"\n"
-	"\tinvokevirtual java/lang/String/equalsIgnoreCase(Ljava/lang/String;)Z\n"
-	"\tifeq False\n"
-	"\ticonst_1\n"
-	"\tireturn\n"
-	"False:\n"
-	"\taload 0\n"
-	"\tldc	\"false\"\n"
-	"\tinvokevirtual java/lang/String/equalsIgnoreCase(Ljava/lang/String;)Z\n"
-	"\tifeq Exception\n"
-	"\ticonst_0\n"
-	"\tireturn\n"
-	"Exception:\n"
-	"\tnew	java/util/InputMismatchException\n"
-	"\tdup\n"
-	"\tinvokespecial java/util/InputMismatchException/<init>()V\n"
-	"\tathrow\n"
-	".end method\n\n";
+char method_readBoolean[]
+	= ".method public static readBoolean()Z\n"
+	  ".limit stack 2\n"
+	  ".limit locals 1\n"
+	  "\tgetstatic %s/scanner Ljava/util/Scanner;\n"
+	  "\tinvokevirtual java/util/Scanner/next()Ljava/lang/String;\n"
+	  "\tastore 0\n"
+	  "\taload 0\n"
+	  "\tldc	\"true\"\n"
+	  "\tinvokevirtual java/lang/String/equalsIgnoreCase(Ljava/lang/String;)Z\n"
+	  "\tifeq False\n"
+	  "\ticonst_1\n"
+	  "\tireturn\n"
+	  "False:\n"
+	  "\taload 0\n"
+	  "\tldc	\"false\"\n"
+	  "\tinvokevirtual java/lang/String/equalsIgnoreCase(Ljava/lang/String;)Z\n"
+	  "\tifeq Exception\n"
+	  "\ticonst_0\n"
+	  "\tireturn\n"
+	  "Exception:\n"
+	  "\tnew	java/util/InputMismatchException\n"
+	  "\tdup\n"
+	  "\tinvokespecial java/util/InputMismatchException/<init>()V\n"
+	  "\tathrow\n"
+	  ".end method\n\n";
 
-char method_readInt[] =
-	".method public static readInt()I\n"
-	".limit stack 1\n"
-	".limit locals 1\n"
-	"\tgetstatic %s/scanner Ljava/util/Scanner;\n"
-	"\tinvokevirtual java/util/Scanner/nextInt()I\n"
-	"\tireturn\n"
-	".end method\n\n";
+char method_readInt[]
+	= ".method public static readInt()I\n"
+	  ".limit stack 1\n"
+	  ".limit locals 1\n"
+	  "\tgetstatic %s/scanner Ljava/util/Scanner;\n"
+	  "\tinvokevirtual java/util/Scanner/nextInt()I\n"
+	  "\tireturn\n"
+	  ".end method\n\n";
 
 char  ref_print_boolean[] = "java/io/PrintStream/print(Z)V";
 char  ref_print_integer[] = "java/io/PrintStream/print(I)V";
 char  ref_print_stream[]  = "java/lang/System/out Ljava/io/PrintStream;";
 char  ref_print_string[]  = "java/io/PrintStream/print(Ljava/lang/String;)V";
-char *ref_read_boolean;   /* must be set in set_class_name */
-char *ref_read_integer;   /* must be set in set_class_name */
+char *ref_read_boolean; /* must be set in set_class_name */
+char *ref_read_integer; /* must be set in set_class_name */
 
 #define REF_READ_BOOLEAN "/readBoolean()Z"
 #define REF_READ_INTEGER "/readInt()I"
 
 /* --- global static variables ---------------------------------------------- */
 
-static BC instruction_set[] = {
-	{ "aload",         0, 1 },
-	{ "areturn",       1, 0 },
-	{ "astore",        1, 0 },
-	{ "getstatic",     0, 1 },
-	{ "goto",          0, 0 },
-	{ "iadd",          2, 1 },
-	{ "iaload",        2, 1 },
-	{ "iand",          2, 1 },
-	{ "iastore",       3, 0 },
-	{ "idiv",          2, 1 },
-	{ "ifeq",          1, 0 },
-	{ "if_icmpeq",     2, 0 },
-	{ "if_icmpge",     2, 0 },
-	{ "if_icmpgt",     2, 0 },
-	{ "if_icmple",     2, 0 },
-	{ "if_icmplt",     2, 0 },
-	{ "if_icmpne",     2, 0 },
-	{ "iload",         0, 1 },
-	{ "imul",          2, 1 },
-	{ "ineg",          1, 1 },
-	{ "invokestatic",  0, 1 },
-	{ "invokevirtual", 0, 0 },
-	{ "ior",           2, 1 },
-	{ "istore",        1, 0 },
-	{ "isub",          2, 1 },
-	{ "irem",          2, 1 },
-	{ "ireturn",       1, 0 },
-	{ "ixor",          2, 1 },
-	{ "ldc",           0, 1 },
-	{ "newarray",      1, 1 },
-	{ "return",        0, 0 },
-	{ "swap",          2, 2 }
-};
+static BC instruction_set[]
+	= {{"aload", 0, 1},			{"areturn", 1, 0},	 {"astore", 1, 0},
+	   {"getstatic", 0, 1},		{"goto", 0, 0},		 {"iadd", 2, 1},
+	   {"iaload", 2, 1},		{"iand", 2, 1},		 {"iastore", 3, 0},
+	   {"idiv", 2, 1},			{"ifeq", 1, 0},		 {"if_icmpeq", 2, 0},
+	   {"if_icmpge", 2, 0},		{"if_icmpgt", 2, 0}, {"if_icmple", 2, 0},
+	   {"if_icmplt", 2, 0},		{"if_icmpne", 2, 0}, {"iload", 0, 1},
+	   {"imul", 2, 1},			{"ineg", 1, 1},		 {"invokestatic", 0, 1},
+	   {"invokevirtual", 0, 0}, {"ior", 2, 1},		 {"istore", 1, 0},
+	   {"isub", 2, 1},			{"irem", 2, 1},		 {"ireturn", 1, 0},
+	   {"ixor", 2, 1},			{"ldc", 0, 1},		 {"newarray", 1, 1},
+	   {"return", 0, 0},		{"swap", 2, 2}};
 
-static const char *java_types[] = {
-	"boolean", "char", "float", "double", "byte", "short", "int", "long"
-};
+static const char *java_types[]
+	= {"boolean", "char", "float", "double", "byte", "short", "int", "long"};
 
-#define NBYTECODES   (sizeof(instruction_set) / sizeof(BC))
+#define NBYTECODES (sizeof(instruction_set) / sizeof(BC))
 #define INITIAL_SIZE 1024
-#define JASM_EXT     ".jasmin"
+#define JASM_EXT ".jasmin"
 
-static char   *class_name;    /**< the class name                             */
-static char   *function_name; /**< the name of current function               */
-static char   *jasm_name;     /**< the jasmin file name                       */
-static int     code_size;     /**< the current code array size                */
-static int     ip;            /**< the instruction pointer                    */
-static Body   *bodies;        /**< list of function bodies                    */
-static Code   *code;          /**< the generated code                         */
-static IDPropt *idprop;        /**< id properties of the current function      */
+static char *class_name;	/**< the class name                             */
+static char *function_name; /**< the name of current function               */
+static char *jasm_name;		/**< the jasmin file name                       */
+static int	 code_size;		/**< the current code array size                */
+static int	 ip;			/**< the instruction pointer                    */
+static Body *bodies;		/**< list of function bodies                    */
+static Code *code;			/**< the generated code                         */
+static IDPropt *idprop;		/**< id properties of the current function      */
 
 int stack_depth, max_stack_depth;
 
@@ -215,61 +194,58 @@ static void adjust_stack(BC *instr);
 
 /* --- code generation interface -------------------------------------------- */
 
-void init_code_generation(void)
-{
-	bodies = NULL;
-}
+void init_code_generation(void) { bodies = NULL; }
 
 void init_subroutine_codegen(const char *name, IDPropt *p)
 {
 	max_stack_depth = stack_depth = 0;
-	ip = 0;
-	code = emalloc(sizeof(Code) * INITIAL_SIZE);
-	code_size = INITIAL_SIZE;
-	function_name = estrdup(name);
-	idprop = p;
+	ip							  = 0;
+	code						  = emalloc(sizeof(Code) * INITIAL_SIZE);
+	code_size					  = INITIAL_SIZE;
+	function_name				  = estrdup(name);
+	idprop						  = p;
 }
 
 void close_subroutine_codegen(int varwidth)
 {
 	Body *body, *last;
-	
 
 	body = emalloc(sizeof(Body));
 
 	/* populate new body */
-	body->name = function_name;
-	body->idprop = idprop;
-	body->code = code;
-	body->ip = ip;
+	body->name			  = function_name;
+	body->idprop		  = idprop;
+	body->code			  = code;
+	body->ip			  = ip;
 	body->max_stack_depth = max_stack_depth;
 	body->variables_width = varwidth;
 
 	/* link into list */
 	/* TODO */
-	 if (bodies == NULL) {
-        bodies = body;
-        body->next = NULL;
-        body->prev = NULL;
-    } else {
-   
-        last = bodies;
-        while (last->next != NULL) {
-            last = last->next;
-        }
+	if (bodies == NULL)
+	{
+		bodies	   = body;
+		body->next = NULL;
+		body->prev = NULL;
+	} else {
 
-       
-        last->next = body;
-        body->prev = last;
-        body->next = NULL;
-    }
+		last = bodies;
+		while (last->next != NULL)
+		{
+			last = last->next;
+		}
+
+		last->next = body;
+		body->prev = last;
+		body->next = NULL;
+	}
 }
 
 void set_class_name(char *cname)
 {
 	size_t class_name_len;
 
-	class_name = estrdup(cname);
+	class_name	   = estrdup(cname);
 	class_name_len = strlen(class_name);
 
 	jasm_name = emalloc(class_name_len + sizeof(JASM_EXT));
@@ -289,22 +265,26 @@ void set_class_name(char *cname)
 
 void assemble(const char *jasmin_path)
 {
-	int status;
+	int	  status;
 	pid_t pid;
 
-	if ((pid = fork()) < 0) {
+	if ((pid = fork()) < 0)
+	{
 		eprintf("Could not fork a new process for assembler");
 	} else if (pid == 0) {
-		if (execlp("java", "java", "-jar", jasmin_path, jasm_name,
-					(char *) NULL) < 0) {
+		if (execlp("java", "java", "-jar", jasmin_path, jasm_name, (char *)NULL)
+			< 0)
+		{
 			eprintf("Could not exec Jasmin");
 		}
 	}
 
-	if (waitpid(pid, &status, 0) < 0) {
+	if (waitpid(pid, &status, 0) < 0)
+	{
 		eprintf("Error waiting for Jasmin");
 	} else {
-		if (WIFEXITED(status) && WEXITSTATUS(status) != EXIT_SUCCESS) {
+		if (WIFEXITED(status) && WEXITSTATUS(status) != EXIT_SUCCESS)
+		{
 			eprintf("Jasmin reported failure");
 		} else if (WIFSIGNALED(status) || WIFSTOPPED(status)) {
 			eprintf("Jasmin stopped or terminated abnormally");
@@ -316,22 +296,21 @@ void gen_1(Bytecode opcode)
 {
 	/* TODO */
 	ensure_space(1);
-	
-	code[ip].type = CODE_INSTRUCTION;
+
+	code[ip].type	= CODE_INSTRUCTION;
 	code[ip++].code = opcode;
-	
+
 	adjust_stack(&instruction_set[opcode]);
-	
 }
 
 void gen_2(Bytecode opcode, int operand)
 {
 	ensure_space(2);
 
-	code[ip].type = CODE_INSTRUCTION;
+	code[ip].type	= CODE_INSTRUCTION;
 	code[ip++].code = opcode;
 
-	code[ip].type = CODE_OPERAND | CODE_INTEGER;
+	code[ip].type  = CODE_OPERAND | CODE_INTEGER;
 	code[ip++].num = operand;
 
 	adjust_stack(&instruction_set[opcode]);
@@ -339,12 +318,12 @@ void gen_2(Bytecode opcode, int operand)
 
 void gen_call(char *fname, IDPropt *idprop)
 {
-	char *fpath;
+	char		*fpath;
 	unsigned int i;
 
 	ensure_space(2);
 
-	code[ip].type = CODE_INSTRUCTION;
+	code[ip].type	= CODE_INSTRUCTION;
 	code[ip++].code = JVM_INVOKESTATIC;
 
 	/* 6 + 2 * idprop->nparams:
@@ -354,29 +333,33 @@ void gen_call(char *fname, IDPropt *idprop)
 	 *  -- 2 for return type, including possibility of array type
 	 * the multiplier of 2 includes the possibilities of array types
 	 */
-	fpath = emalloc(strlen(class_name) + strlen(fname) +
-			(6 + 2 * idprop->nparams) * sizeof(char));
+	fpath = emalloc(strlen(class_name) + strlen(fname)
+		+ (6 + 2 * idprop->nparams) * sizeof(char));
 	strcpy(fpath, class_name);
 	strcat(fpath, ".");
 	strcat(fpath, fname);
 	strcat(fpath, "(");
-	for (i = 0; i < idprop->nparams; i++) {
-		if (IS_ARRAY_TYPE(idprop->params[i])) {
+	for (i = 0; i < idprop->nparams; i++)
+	{
+		if (IS_ARRAY_TYPE(idprop->params[i]))
+		{
 			strcat(fpath, "[");
 		}
 		strcat(fpath, "I");
 	}
 	strcat(fpath, ")");
-	if (IS_ARRAY_TYPE(idprop->type)) {
+	if (IS_ARRAY_TYPE(idprop->type))
+	{
 		strcat(fpath, "[");
 	}
-	if (idprop->type == TYPE_CALLABLE) {
+	if (idprop->type == TYPE_CALLABLE)
+	{
 		strcat(fpath, "V");
 	} else {
 		strcat(fpath, "I");
 	}
 
-	code[ip].type = CODE_OPERAND | CODE_REFERENCE | CODE_ALLOCATED;
+	code[ip].type	  = CODE_OPERAND | CODE_REFERENCE | CODE_ALLOCATED;
 	code[ip++].string = fpath;
 
 	adjust_stack(&instruction_set[JVM_INVOKESTATIC]);
@@ -403,31 +386,33 @@ void gen_label(Label label)
 {
 	ensure_space(1);
 
-	code[ip].type = CODE_LABEL;
+	code[ip].type	 = CODE_LABEL;
 	code[ip++].label = label;
 }
 
 void gen_2_label(Bytecode opcode, Label label)
 {
 	/* TODO */
-	
+
 	ensure_space(2);
 
-	code[ip].type = CODE_INSTRUCTION;
+	code[ip].type	= CODE_INSTRUCTION;
 	code[ip++].code = opcode;
 
-	code[ip].type = CODE_LABEL | CODE_OPERAND;
+	code[ip].type	 = CODE_LABEL | CODE_OPERAND;
 	code[ip++].label = label;
+
+	adjust_stack(&instruction_set[opcode]);
 }
 
 void gen_newarray(JVMatype atype)
 {
 	ensure_space(2);
 
-	code[ip].type = CODE_INSTRUCTION;
+	code[ip].type	= CODE_INSTRUCTION;
 	code[ip++].code = JVM_NEWARRAY;
 
-	code[ip].type = CODE_OPERAND | CODE_ARRAY_TYPE;
+	code[ip].type	 = CODE_OPERAND | CODE_ARRAY_TYPE;
 	code[ip++].atype = atype;
 
 	adjust_stack(&instruction_set[JVM_NEWARRAY]);
@@ -437,23 +422,25 @@ void gen_print(ValType type)
 {
 	ensure_space(5);
 
-	code[ip].type = CODE_INSTRUCTION;
+	code[ip].type	= CODE_INSTRUCTION;
 	code[ip++].code = JVM_GETSTATIC;
 
-	code[ip].type = CODE_OPERAND | CODE_REFERENCE;
+	code[ip].type	  = CODE_OPERAND | CODE_REFERENCE;
 	code[ip++].string = ref_print_stream;
 
-	code[ip].type = CODE_INSTRUCTION;
+	code[ip].type	= CODE_INSTRUCTION;
 	code[ip++].code = JVM_SWAP;
 
-	code[ip].type = CODE_INSTRUCTION;
+	code[ip].type	= CODE_INSTRUCTION;
 	code[ip++].code = JVM_INVOKEVIRTUAL;
 
 	code[ip].type = CODE_OPERAND | CODE_REFERENCE;
-	if (IS_CALLABLE_TYPE(type)) {
+	if (IS_CALLABLE_TYPE(type))
+	{
 		SET_RETURN_TYPE(type);
 	}
-	if (type == TYPE_BOOLEAN) {
+	if (type == TYPE_BOOLEAN)
+	{
 		code[ip++].string = ref_print_boolean;
 	} else if (type == TYPE_INTEGER) {
 		code[ip++].string = ref_print_integer;
@@ -470,22 +457,22 @@ void gen_print_string(char *string)
 {
 	ensure_space(6);
 
-	code[ip].type = CODE_INSTRUCTION;
+	code[ip].type	= CODE_INSTRUCTION;
 	code[ip++].code = JVM_GETSTATIC;
 
-	code[ip].type = CODE_OPERAND | CODE_REFERENCE;
+	code[ip].type	  = CODE_OPERAND | CODE_REFERENCE;
 	code[ip++].string = ref_print_stream;
 
-	code[ip].type = CODE_INSTRUCTION;
+	code[ip].type	= CODE_INSTRUCTION;
 	code[ip++].code = JVM_LDC;
 
-	code[ip].type = CODE_OPERAND | CODE_STRING | CODE_ALLOCATED;
+	code[ip].type	  = CODE_OPERAND | CODE_STRING | CODE_ALLOCATED;
 	code[ip++].string = string;
 
-	code[ip].type = CODE_INSTRUCTION;
+	code[ip].type	= CODE_INSTRUCTION;
 	code[ip++].code = JVM_INVOKEVIRTUAL;
 
-	code[ip].type = CODE_OPERAND | CODE_REFERENCE;
+	code[ip].type	  = CODE_OPERAND | CODE_REFERENCE;
 	code[ip++].string = ref_print_string;
 
 	adjust_stack(&instruction_set[JVM_GETSTATIC]);
@@ -497,11 +484,12 @@ void gen_read(ValType type)
 {
 	ensure_space(2);
 
-	code[ip].type = CODE_INSTRUCTION;
+	code[ip].type	= CODE_INSTRUCTION;
 	code[ip++].code = JVM_INVOKESTATIC;
 
 	code[ip].type = CODE_OPERAND | CODE_REFERENCE;
-	if (type == TYPE_BOOLEAN) {
+	if (type == TYPE_BOOLEAN)
+	{
 		code[ip++].string = ref_read_boolean;
 	} else if (type == TYPE_INTEGER) {
 		code[ip++].string = ref_read_integer;
@@ -520,7 +508,8 @@ Label get_label(void)
 
 const char *get_opcode_string(Bytecode opcode)
 {
-	if ((unsigned long) opcode < NBYTECODES) {
+	if ((unsigned long)opcode < NBYTECODES)
+	{
 		return instruction_set[opcode].instr;
 	} else {
 		return "INVALID OPCODE";
@@ -533,10 +522,7 @@ static void dump_code(FILE *file);
 static void dump_method(FILE *file, Body *b);
 static void dump_preamble(FILE *file, char *name);
 
-void list_code(void)
-{
-	dump_code(stdout);
-}
+void list_code(void) { dump_code(stdout); }
 
 void dump_code(FILE *obj_file)
 {
@@ -546,7 +532,8 @@ void dump_code(FILE *obj_file)
 	dump_preamble(obj_file, class_name);
 
 	/* dump the methods */
-	for (b = bodies; b; b = b->next) {
+	for (b = bodies; b; b = b->next)
+	{
 		dump_method(obj_file, b);
 	}
 }
@@ -555,7 +542,8 @@ void make_code_file(void)
 {
 	FILE *obj_file;
 
-	if ((obj_file = fopen(jasm_name, "w")) == NULL) {
+	if ((obj_file = fopen(jasm_name, "w")) == NULL)
+	{
 		eprintf("Could not open code file:");
 	}
 
@@ -568,7 +556,8 @@ void make_code_file(void)
 
 static void ensure_space(int num_instr)
 {
-	if (ip + num_instr > code_size) {
+	if (ip + num_instr > code_size)
+	{
 		code = erealloc(code, code_size * 2 * sizeof(Code));
 		code_size *= 2;
 	}
@@ -583,7 +572,8 @@ static void ensure_space(int num_instr)
 static void adjust_stack(BC *instr)
 {
 	stack_depth += instr->push;
-	if (stack_depth > max_stack_depth) {
+	if (stack_depth > max_stack_depth)
+	{
 		max_stack_depth = stack_depth;
 	}
 	stack_depth -= instr->pop;
@@ -597,35 +587,39 @@ static void adjust_stack(BC *instr)
  */
 static void dump_method(FILE *file, Body *b)
 {
-	int i;
+	int			 i;
 	unsigned int k;
 
-	if (strcmp(b->name, "main") == 0) {
+	if (strcmp(b->name, "main") == 0)
+	{
 
 		fprintf(file, ".method public static main([Ljava/lang/String;)V\n");
 
 	} else {
 
 		fprintf(file, ".method public static %s(", b->name);
-		for (k = 0; k < b->idprop->nparams; k++) {
-			if (IS_ARRAY(b->idprop->params[k])) {
+		for (k = 0; k < b->idprop->nparams; k++)
+		{
+			if (IS_ARRAY(b->idprop->params[k]))
+			{
 				fputs("[", file);
 			}
 			fputs("I", file);
 		}
 		fprintf(file, ")%s%s\n",
-				(IS_ARRAY_TYPE(b->idprop->type) ? "[" : ""),
-				(b->idprop->type == TYPE_CALLABLE ? "V" : "I"));
-
+			(IS_ARRAY_TYPE(b->idprop->type) ? "[" : ""),
+			(b->idprop->type == TYPE_CALLABLE ? "V" : "I"));
 	}
 	fprintf(file, ".limit stack %d\n", b->max_stack_depth);
 	fprintf(file, ".limit locals %d\n", b->variables_width);
 
-	for (i = 0; i < b->ip; i++) {
+	for (i = 0; i < b->ip; i++)
+	{
 
 		Code c = b->code[i];
 
-		switch (c.type & MASK_TYPE) {
+		switch (c.type & MASK_TYPE)
+		{
 			case CODE_LABEL:
 				fprintf(file, "L%d:\n", c.label);
 				break;
@@ -634,7 +628,8 @@ static void dump_method(FILE *file, Body *b)
 				break;
 			case CODE_INSTRUCTION:
 				fprintf(file, "\t%s", get_opcode_string(c.code));
-				switch (c.code) {
+				switch (c.code)
+				{
 					case JVM_ARETURN:
 					case JVM_IADD:
 					case JVM_IALOAD:
@@ -659,10 +654,10 @@ static void dump_method(FILE *file, Body *b)
 				}
 				break;
 			case CODE_OPERAND:
-				switch (c.type & MASK_DATA_TYPE) {
+				switch (c.type & MASK_DATA_TYPE)
+				{
 					case CODE_ARRAY_TYPE:
-						fprintf(file, " %s\n",
-								java_types[c.atype - T_BOOLEAN]);
+						fprintf(file, " %s\n", java_types[c.atype - T_BOOLEAN]);
 						break;
 					case CODE_INTEGER:
 						fprintf(file, " %d\n", c.num);
@@ -675,18 +670,18 @@ static void dump_method(FILE *file, Body *b)
 						break;
 					default:
 						weprintf("Unknown data type for bytecode: %x\n",
-								(unsigned int) c.type);
+							(unsigned int)c.type);
 				}
 				break;
 			default:
 				weprintf("Unknown operator for bytecode: %x\n",
-						(unsigned int) c.type);
+					(unsigned int)c.type);
 		}
-
 	}
 
 	/* guard against a dangling label at the end of the code stream */
-	if ((b->code[b->ip - 1].type & MASK_TYPE) == CODE_LABEL) {
+	if ((b->code[b->ip-1].type & MASK_TYPE) == CODE_LABEL)
+	{
 		fprintf(file, "\tnop\n");
 	}
 
@@ -721,39 +716,42 @@ void release_code_generation(void)
 
 	/* free bodies */
 	/* TODO */
-	 b = bodies;
-    while (b != NULL) {
-        d = b;
-        b = b->next;
+	b = bodies;
+	while (b != NULL)
+	{
+		d = b;
+		b = b->next;
 
-     	/*if (d->code && d->code->string) {
-        	free(d->code->string);
-        	
-        }*/
-        if (d->name) {
-     		free(d->name);
-     	}
+		/*if (d->code && d->code->string) {
+			free(d->code->string);
 
-        if (d->code) {
-     		free(d->code);
-     	}
-       
-        
-        if (d->idprop) {
-        	if (d->idprop->params) {
-            free(d->idprop->params);
-        	}
-        free(d->idprop);
-        }
-     	
-     	
+		}*/
+		if (d->name)
+		{
+			free(d->name);
+		}
 
-        free(d);
-    }
-    bodies = NULL;
+		if (d->code)
+		{
+			free(d->code);
+		}
+
+		if (d->idprop)
+		{
+			if (d->idprop->params)
+			{
+				free(d->idprop->params);
+			}
+			free(d->idprop);
+		}
+
+		free(d);
+	}
+	bodies = NULL;
 
 	/* free strings */
 	/* TODO */
+	free(class_name);
 	free(jasm_name);
 	free(ref_read_boolean);
 	free(ref_read_integer);

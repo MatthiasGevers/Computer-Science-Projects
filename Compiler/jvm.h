@@ -1,6 +1,8 @@
 /**
  * @file    jvm.h
  * @brief   Definitions for Java Virtual Machine instructions and data types.
+ * @author  W.H.K. Bester (whkbester@cs.sun.ac.za)
+ * @date    2023-08-05
  */
 
 #ifndef JVM_H

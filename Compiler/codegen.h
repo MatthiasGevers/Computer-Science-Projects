@@ -1,6 +1,8 @@
 /**
  * @file    codegen.h
  * @brief   Code generation functions for AMPL-2023.
+ * @author  W.H.K. Bester (whkbester@cs.sun.ac.za)
+ * @date    2023-08-05
  */
 
 #ifndef CODEGEN_H

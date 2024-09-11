@@ -2,6 +2,8 @@
  * @file    token.h
  * @brief   Data type definitions for the lexical analyser (scanner) of
  *          AMPL-2023.
+ * @author  W.H.K. Bester (whkbester@cs.sun.ac.za)
+ * @date    2023-06-29
  */
 
 #ifndef TOKEN_H
@@ -13,10 +15,10 @@
 /** the types of tokens that the scanner recognises */
 typedef enum {
 
-	TOK_EOF, /* end-of-file    */
-	TOK_ID,  /* identifier     */
-	TOK_NUM, /* number literal */
-	TOK_STR, /* string literal */
+	TOK_EOF,  /* end-of-file    */
+	TOK_ID,   /* identifier     */
+	TOK_NUM,  /* number literal */
+	TOK_STR,  /* string literal */
 
 	/* keywords: note that the boolean operators AND and OR, and the remainder
 	 * operator REM, although written out as string literals, are still
@@ -44,16 +46,16 @@ typedef enum {
 
 	/* unary-only operator */
 	TOK_NOT,
-
+	
 	/* relational operators: the order of these operators is significant -- it
 	 * allows us to do range checking in the parser
 	 */
-	TOK_EQ, /* equal to                 */
-	TOK_GE, /* greater than or equal to */
-	TOK_GT, /* (strictly) greater than  */
-	TOK_LE, /* less than or equal to    */
-	TOK_LT, /* (strictly) less than     */
-	TOK_NE, /* not equal to             */
+	TOK_EQ,  /* equal to                 */
+	TOK_GE,  /* greater than or equal to */
+	TOK_GT,  /* (strictly) greater than  */
+	TOK_LE,  /* less than or equal to    */
+	TOK_LT,  /* (strictly) less than     */
+	TOK_NE,  /* not equal to             */
 
 	/* additive operators */
 	TOK_MINUS,
@@ -81,11 +83,11 @@ typedef enum {
 
 /** the token data type */
 typedef struct {
-	TokenType type; /**< the type of the token        */
+	TokenType type;                 /**< the type of the token        */
 	union {
-		int value;                   /**< numeric value (for integers) */
-		char lexeme[MAX_ID_LEN + 1]; /**< lexeme for identifiers       */
-		char *string;                /**< string (for write)           */
+		int   value;                /**< numeric value (for integers) */
+		char  lexeme[MAX_ID_LEN+1]; /**< lexeme for identifiers       */
+		char *string;               /**< string (for write)           */
 	};
 } Token;
 

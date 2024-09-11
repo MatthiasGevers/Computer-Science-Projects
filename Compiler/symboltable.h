@@ -1,6 +1,8 @@
 /**
  * @file    symboltable.h
  * @brief   A symbol table for AMPL-2023.
+ * @author  W.H.K. Bester (whkbester@cs.sun.ac.za)
+ * @date    2023-07-06
  */
 
 #ifndef SYMBOLTABLE_H
@@ -11,12 +13,12 @@
 #include "valtypes.h"
 
 typedef struct {
-	ValType type; /*<< variable or subroutine return type   */
+	ValType type;                   /*<< variable or subroutine return type   */
 	union {
-		unsigned int offset; /*<< local variable offset for codegen    */
+		unsigned int offset;        /*<< local variable offset for codegen    */
 		struct {
-			unsigned int nparams; /*<< number of parameters for subroutines */
-			ValType *params;      /*<< array of parameter types             */
+			unsigned int  nparams;  /*<< number of parameters for subroutines */
+			ValType      *params;   /*<< array of parameter types             */
 		};
 	};
 } IDPropt;

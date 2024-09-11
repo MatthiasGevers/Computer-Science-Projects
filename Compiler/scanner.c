@@ -1,40 +1,46 @@
 /**
  * @file    scanner.c
  * @brief   The scanner for AMPL-2023.
+ * @author  W.H.K. Bester (whkbester@cs.sun.ac.za)
+ * @date    2023-06-29
  */
 
 #include "scanner.h"
-
-#include "boolean.h"
-#include "error.h"
-#include "token.h"
 
 #include <ctype.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "boolean.h"
+#include "error.h"
+#include "token.h"
+
 /* --- global static variables ---------------------------------------------- */
 
-static FILE *src_file;    /* the source file pointer             */
-static int ch;            /* the next source character           */
-static int column_number; /* the current column number           */
+static FILE *src_file;		/* the source file pointer             */
+static int	 ch;			/* the next source character           */
+static int	 column_number; /* the current column number           */
 static struct {
-	char *word;     /* the reserved word, i.e., the lexeme */
+	char	 *word; /* the reserved word, i.e., the lexeme */
 	TokenType type; /* the associated topen type           */
-} reserved[] = {{"and",TOK_AND},{"array",TOK_ARRAY},{"bool",TOK_BOOL},
-{"chillax",TOK_CHILLAX},{"elif",TOK_ELIF},{"else",TOK_ELSE},
-{"end",TOK_END},{"false",TOK_FALSE},{"if",TOK_IF},{"input",TOK_INPUT},
-{"int",TOK_INT},{"let",TOK_LET},{"main",TOK_MAIN},{"not",TOK_NOT},
-{"or",TOK_OR},{"output",TOK_OUTPUT},{"program",TOK_PROGRAM},
-{"rem",TOK_REM},{"return",TOK_RETURN},{"true",TOK_TRUE},{"while",TOK_WHILE}
-/* TODO: Populate this array with the appropriate pairs of reserved word
- * strings and token types, sorted alphabetically by reserved word string.
- */
+} reserved[] = {
+	{"and", TOK_AND},		  {"array", TOK_ARRAY},
+	{"bool", TOK_BOOL},		  {"chillax", TOK_CHILLAX},
+	{"elif", TOK_ELIF},		  {"else", TOK_ELSE},
+	{"end", TOK_END},		  {"false", TOK_FALSE},
+	{"if", TOK_IF},			  {"input", TOK_INPUT},
+	{"int", TOK_INT},		  {"let", TOK_LET},
+	{"main", TOK_MAIN},		  {"not", TOK_NOT},
+	{"or", TOK_OR},			  {"output", TOK_OUTPUT},
+	{"program", TOK_PROGRAM}, {"rem", TOK_REM},
+	{"return", TOK_RETURN},	  {"true", TOK_TRUE},
+	{"while", TOK_WHILE}
+
 };
 
 #define NUM_RESERVED_WORDS (sizeof(reserved) / sizeof(reserved[0]))
-#define MAX_INIT_STR_LEN   (1024)
+#define MAX_INIT_STR_LEN (1024)
 
 /* --- function prototypes -------------------------------------------------- */
 
@@ -48,13 +54,11 @@ static void skip_comment(void);
 
 void init_scanner(FILE *in_file)
 {
-	src_file = in_file;
+	src_file	  = in_file;
 	position.line = 1;
 	position.col = column_number = 0;
 	next_char();
 }
-
-
 
 /**
  * @brief Reads and processes the next token from the file.
@@ -70,19 +74,21 @@ void init_scanner(FILE *in_file)
 
 void get_token(Token *token)
 {
-
-	while (ch == '{' || isspace(ch) || ch == '\n') {
-
-		while (isspace(ch)) {
+	while (ch == '{' || isspace(ch) || ch == '\n')
+	{
+		while (isspace(ch))
+		{
 			next_char();
 		}
 
-		if (ch == '{') {
+		if (ch == '{')
+		{
 			skip_comment();
 			next_char();
 		}
 
-		if (ch == '\n') {
+		if (ch == '\n')
+		{
 			next_char();
 		}
 	}
@@ -91,19 +97,21 @@ void get_token(Token *token)
 	position.col = column_number;
 
 	/* get the next token */
-	if (ch != EOF) {
-		if (isalpha(ch) || ch == '_') {
-
+	if (ch != EOF)
+	{
+		if (isalpha(ch) || ch == '_')
+		{
 			/* process a word */
 			process_word(token);
 
-		} else if (isdigit(ch)) {
-
+		} else if (isdigit(ch))
+		{
 			/* process a number */
 			process_number(token);
 
-		} else switch (ch) {
-
+		} else
+			switch (ch)
+			{
 				/* process a string */
 				case '"':
 
@@ -119,20 +127,24 @@ void get_token(Token *token)
 
 				case '>':
 					next_char();
-					if (ch == '=') {
+					if (ch == '=')
+					{
 						token->type = TOK_GE;
 						next_char();
-					} else {
+					} else
+					{
 						token->type = TOK_GT;
 					}
 					break;
 
 				case '<':
 					next_char();
-					if (ch == '=') {
+					if (ch == '=')
+					{
 						token->type = TOK_LE;
 						next_char();
-					} else {
+					} else
+					{
 						token->type = TOK_LT;
 					}
 					break;
@@ -140,34 +152,40 @@ void get_token(Token *token)
 				case '/':
 
 					next_char();
-					if (ch == '=') {
+					if (ch == '=')
+					{
 						next_char();
 						token->type = TOK_NE;
 
-					} else {
+					} else
+					{
 						token->type = TOK_DIV;
 					}
 					break;
 
 				case '-':
 					next_char();
-					if (ch == '>') {
+					if (ch == '>')
+					{
 						token->type = TOK_ARROW;
 						next_char();
-					} else {
+					} else
+					{
 						token->type = TOK_MINUS;
 					}
 					break;
 
 				case '|':
 					next_char();
-					if (ch == '|') {
+					if (ch == '|')
+					{
 						next_char();
 						token->type = TOK_OR;
-					} else {
+					} else
+					{
 						position.col = column_number - 1;
-						leprintf("illegal character '%c' (ASCII #%d)", '|',
-						         '|');
+						leprintf(
+							"illegal character '%c' (ASCII #%d)", '|', '|');
 					}
 					break;
 
@@ -180,13 +198,15 @@ void get_token(Token *token)
 				case '&':
 
 					next_char();
-					if (ch == '&') {
+					if (ch == '&')
+					{
 						next_char();
 						token->type = TOK_AND;
-					} else {
+					} else
+					{
 						position.col = column_number - 1;
-						leprintf("illegal character '%c' (ASCII #%d)", '&',
-						         '&');
+						leprintf(
+							"illegal character '%c' (ASCII #%d)", '&', '&');
 					}
 					break;
 
@@ -216,13 +236,15 @@ void get_token(Token *token)
 				case '.':
 
 					next_char();
-					if (ch == '.') {
+					if (ch == '.')
+					{
 						next_char();
 						token->type = TOK_DOTDOT;
-					} else {
+					} else
+					{
 						position.col = column_number - 1;
-						leprintf("illegal character '%c' (ASCII #%d)", '.',
-						         '.');
+						leprintf(
+							"illegal character '%c' (ASCII #%d)", '.', '.');
 					}
 					break;
 
@@ -262,7 +284,8 @@ void get_token(Token *token)
 					break;
 			}
 
-	} else {
+	} else
+	{
 		position.col--;
 		token->type = TOK_EOF;
 	}
@@ -279,27 +302,24 @@ void get_token(Token *token)
 void next_char(void)
 {
 	static char last_read = '\0';
-	
+
 	last_read = ch;
-	ch = fgetc(src_file);
-	if (ch == EOF) {
+	ch		  = fgetc(src_file);
+	if (ch == EOF)
+	{
 		column_number++;
 		return;
 	}
-	
-	if (last_read == '\n') {
-	
+
+	if (last_read == '\n')
+	{
 		position.line++;
 		column_number = 1;
-	} else {
-		
+	} else
+	{
 		column_number++;
 	}
-	
-
-	
 }
-
 
 /**
  * @brief Processes a numeric literal, generating a number token.
@@ -316,14 +336,16 @@ void process_number(Token *token)
 {
 	int number;
 	int nextnum;
-	number = ch - '0';
+	number	= ch - '0';
 	nextnum = 0;
 
 	next_char();
 
-	while (isdigit(ch)) {
+	while (isdigit(ch))
+	{
 		nextnum = ch - '0';
-		if (number > (INT_MAX - nextnum) / 10) {
+		if (number > (INT_MAX - nextnum) / 10)
+		{
 			leprintf("number too large");
 		}
 		number = 10 * number + nextnum;
@@ -331,11 +353,9 @@ void process_number(Token *token)
 		next_char();
 	}
 
-	token->type = TOK_NUM;
+	token->type	 = TOK_NUM;
 	token->value = number;
-
 }
-
 
 /**
  * @brief Processes a string literal, generating a string token.
@@ -352,46 +372,55 @@ void process_string(Token *token)
 	size_t i, nstring = MAX_INIT_STR_LEN;
 	i = 0;
 	int pos;
-	pos = column_number-1;
+	pos = column_number - 1;
 
-	char *my_string = (char *) malloc((nstring + 1) * sizeof(char));
-	if (my_string == NULL) {
+	char *my_string = (char *)malloc((nstring + 1) * sizeof(char));
+	if (my_string == NULL)
+	{
 		leprintf("Memory reallocation failed.\n");
 	}
 
-	while (ch != '"') {
-
-		if (ch == EOF) {
+	while (ch != '"')
+	{
+		if (ch == EOF)
+		{
 			leprintf("string not closed");
 		}
-		if (i >= nstring) {
+		if (i >= nstring)
+		{
 			nstring *= 2;
-			my_string =
-			    (char *) realloc(my_string, (nstring + 1) * sizeof(char));
+			my_string
+				= (char *)realloc(my_string, (nstring + 1) * sizeof(char));
 
-			if (my_string == NULL) {
+			if (my_string == NULL)
+			{
 				leprintf("Memory reallocation failed.\n");
 			}
 		}
 
-		if (!(isprint(ch))) {
+		if (!(isprint(ch)))
+		{
 			position.col = column_number;
 			leprintf("non-printable character (ASCII #%d) in string", ch);
 		}
 
-		if (ch == '\\') {
+		if (ch == '\\')
+		{
 			my_string[i] = ch;
 			i++;
 			next_char();
 
-			if (ch == 'n' || ch == 't' || ch == '"' || ch == '\\') {
+			if (ch == 'n' || ch == 't' || ch == '"' || ch == '\\')
+			{
 				my_string[i] = ch;
 
-			} else {
+			} else
+			{
 				position.col = column_number - 1;
 				leprintf("illegal escape code '\\%c' in string", ch);
 			}
-		} else {
+		} else
+		{
 			my_string[i] = ch;
 		}
 
@@ -401,11 +430,10 @@ void process_string(Token *token)
 	next_char();
 
 	my_string[i] = '\0';
-	position.col=pos;
+	position.col = pos;
 
-	token->type = TOK_STR;
+	token->type	  = TOK_STR;
 	token->string = my_string;
-
 }
 
 /**
@@ -422,53 +450,50 @@ void process_string(Token *token)
  */
 void process_word(Token *token)
 {
-	char lexeme[MAX_ID_LEN+1];
-	int i, cmp, low, mid, high;
+	char lexeme[MAX_ID_LEN + 1];
+	int	 i, cmp, low, mid, high;
 	i = 0;
-	
 
-	while (isalpha(ch) || ch == '_' || isdigit(ch)) {
-		if (i == MAX_ID_LEN) {
+	while (isalpha(ch) || ch == '_' || isdigit(ch))
+	{
+		if (i == MAX_ID_LEN)
+		{
 			leprintf("identifier too long");
 		}
 		lexeme[i] = ch;
 		i++;
 		next_char();
-		
 	}
 	lexeme[i] = '\0';
-	
-	
 
-
-	low = 0;
-	high = sizeof(reserved) / sizeof(reserved[0]) - 1;
+	low			= 0;
+	high		= sizeof(reserved) / sizeof(reserved[0]) - 1;
 	token->type = TOK_ID;
 	strcpy(token->lexeme, lexeme);
-	
 
-/*
-* Performs a binary search to match a lexeme with reserved keywords.
-*/
-	while (low <= high) {
+	/*
+	 * Performs a binary search to match a lexeme with reserved keywords.
+	 */
+	while (low <= high)
+	{
 		mid = low + (high - low) / 2;
 		cmp = strcmp(lexeme, reserved[mid].word);
 
-		if (cmp == 0) {
+		if (cmp == 0)
+		{
 			strcpy(token->lexeme, "");
-			
+
 			token->type = reserved[mid].type;
 			break;
-		} else if (cmp < 0) {
+		} else if (cmp < 0)
+		{
 			high = mid - 1;
-		} else {
+		} else
+		{
 			low = mid + 1;
 		}
 	}
-	
-	
 }
-
 
 /**
  * Skips a comment block in the source code.
@@ -481,16 +506,19 @@ void skip_comment(void)
 {
 	SourcePos start_pos;
 
-	start_pos.col = column_number;
+	start_pos.col  = column_number;
 	start_pos.line = position.line;
 	next_char();
 
-	while (ch != '}') {
-		if (ch == EOF) {
+	while (ch != '}')
+	{
+		if (ch == EOF)
+		{
 			position = start_pos;
 			leprintf("comment not closed");
 		}
-		if (ch == '{') {
+		if (ch == '{')
+		{
 			skip_comment();
 		}
 

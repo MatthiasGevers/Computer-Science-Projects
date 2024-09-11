@@ -5,6 +5,8 @@
  * values.  This implementation does not support the insertion or retrieval of
  * <code>NULL</code> keys or values.
  *
+ * @author  W.H.K. Bester (whkbester@cs.sun.ac.za)
+ * @date    2023-07-06
  */
 
 #ifndef HASH_TABLE_H
@@ -42,8 +44,8 @@ typedef struct hashtab HashTab;
  *     initialisation failed
  */
 HashTab *ht_init(float loadfactor,
-                 unsigned int (*hash)(void *key, unsigned int size),
-                 int (*cmp)(void *val1, void *val2));
+				 unsigned int (*hash)(void *key, unsigned int size),
+				 int (*cmp)(void *val1, void *val2));
 
 /**
  * Associate the specified key with the specified value in the specified hash
@@ -91,7 +93,9 @@ void *ht_search(HashTab *ht, void *key);
  *     <code>EXIT_SUCCESS</code> if the memory resources of the specified hash
  *     table were released successfully, or <code>EXIT_FAILURE</code> otherwise
  */
-int ht_free(HashTab *ht, void (*freekey)(void *k), void (*freeval)(void *v));
+int ht_free(HashTab *ht,
+			void (*freekey)(void *k),
+			void (*freeval)(void *v));
 
 /**
  * Display the specified hash table on standard output.  This function fails
@@ -104,6 +108,6 @@ int ht_free(HashTab *ht, void (*freekey)(void *k), void (*freeval)(void *v));
  *     specified key and value in the specified buffer; the buffer is assumed to
  *     have been allocated by the caller
  */
-void ht_print(HashTab *ht, void (*keyval2str)(void *k, void *v, char *b));
+void ht_print(HashTab *ht, void (*keyval2str)(void *k, void*v, char *b));
 
 #endif /* HASH_TABLE_H */

@@ -14,7 +14,7 @@ DEBUG    = -ggdb
 OPTIMISE = -O0
 WARNINGS = -Wall -Wextra -Wno-variadic-macros -Wno-overlength-strings -pedantic
 CFLAGS   = $(DEBUG) $(OPTIMISE) $(WARNINGS)
-DFLAGS   = -DDEBUG_PARSER -DDEBUG_SYMBOL_TABLE -DDEBUG_HASH_TABLE -DDEBUG_CODEGEN
+#DFLAGS   =  -DDEBUG_PARSER -DDEBUG_SYMBOL_TABLE -DDEBUG_HASH_TABLE -DDEBUG_CODEGEN
 
 # commands
 # XXX Note: On Unix, the "cc" executable refers to the system's C compiler.  In

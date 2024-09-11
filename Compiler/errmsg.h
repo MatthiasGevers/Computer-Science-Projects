@@ -1,6 +1,8 @@
 /**
  * @file    errmsg.h
  * @brief   Error messages for the AMPL-2023 compiler.
+ * @author  W.H.K. Bester (whkbester@cs.sun.ac.za)
+ * @date    2023-07-03
  */
 
 #ifndef ERRMSG_H

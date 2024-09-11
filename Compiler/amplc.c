@@ -3,6 +3,16 @@
  *
  * A recursive-descent compiler for the AMPL-2023 language.
  *
+ * All scanning errors are handled in the scanner.  Parser errors MUST be
+ * handled by the <code>abort_c</code> function.  System and environment errors
+ * -- for example, running out of memory -- MUST be handled in the unit in which
+ * they occur.  Transient errors -- for example, nonexistent files, MUST be
+ * reported where they occur.  There are no warnings, which is to say, all
+ * errors are fatal and MUST cause compilation to terminate with an abnormal
+ * error code.
+ * this is important
+ * @author  W.H.K. Bester (whkbester@cs.sun.ac.za)
+ * @date    2023-07-04
  */
 
 #include <ctype.h>
@@ -20,7 +30,6 @@
 #include "token.h"
 
 /* --- type definitions ----------------------------------------------------- */
-
 
 
 typedef struct variable_s Variable;
@@ -53,6 +62,7 @@ Token token; /**< the lookahead token type                           */
 #if 0
 ValType return_type;  /**< the return type of the current subroutine          */
 #endif
+
 
 /* --- helper macros -------------------------------------------------------- */
 
@@ -94,15 +104,12 @@ void parse_input(void);
 void parse_output(void);
 void parse_return(void);
 void parse_while(void);
-void parse_arglist(char *id, IDPropt *propt);
-void parse_index(char *id);
+void parse_arglist();
+void parse_index();
 void parse_expr(ValType *type);
 void parse_simple(ValType *type);
 void parse_term(ValType *type);
 void parse_factor(ValType *type);
-
-
-/* --- function prototypes: helper routines --------------------------------- */
 
 
 void chktypes(ValType found, ValType expected, SourcePos *pos, ...);
@@ -111,11 +118,9 @@ void expect_id(char **id);
 
 /* --- function prototypes: constructors ------------------------------------ */
 
-
 IDPropt *idpropt(ValType type, unsigned int offset, unsigned int nparams,
-		ValType *params);
+ValType *params);
 Variable *variable(char *id, ValType type, SourcePos pos);
-
 
 /* --- function prototypes: error reporting --------------------------------- */
 
@@ -131,6 +136,7 @@ int main(int argc, char *argv[])
 
 	FILE *src_file;
 
+
 	/* set up global variables */
 	setprogname(argv[0]);
 
@@ -140,13 +146,12 @@ int main(int argc, char *argv[])
 		eprintf("usage: %s <filename>", getprogname());
 	}
 
-	
-	  if ((jasmin_path = getenv("JASMIN_JAR")) == NULL) {
-		  eprintf("JASMIN_JAR environment variable not set");
-	  }
+	if ((jasmin_path = getenv("JASMIN_JAR")) == NULL)
+	{
+		eprintf("JASMIN_JAR environment variable not set");
+	}
 
-	  setsrcname(argv[1]);
-	  
+	setsrcname(argv[1]);
 
 	/* open the source file, and report an error if it cannot be opened */
 	if ((src_file = fopen(argv[1], "r")) == NULL)
@@ -156,30 +161,28 @@ int main(int argc, char *argv[])
 
 	/* initialise all compiler units */
 	init_scanner(src_file);
-	
+
 	init_symbol_table();
 	init_code_generation();
-	
-	
-	
+
 	get_token(&token);
 	parse_program();
-	
+
 	make_code_file();
 	assemble(jasmin_path);
-	                            
-	
-	#ifdef DEBUG_CODEGEN
+
+#ifdef DEBUG_CODEGEN
 	list_code();
-	#endif                                                       
-                                                                                                                                                                                                                                                                       
+#endif
 
 	/* produce the object code, and assemble */
+	
 
 	/* release all allocated resources */
+	
 	release_code_generation();
 	release_symbol_table();
-	
+
 	fclose(src_file);
 	freeprogname();
 	freesrcname();
@@ -202,11 +205,12 @@ void parse_program(void)
 
 	DBG_start("<program>");
 
+
 	expect(TOK_PROGRAM);
 	expect_id(&class_name);
 	set_class_name(class_name);
 	expect(TOK_COLON);
-	
+
 	while (token.type == TOK_ID)
 	{
 		parse_subdef();
@@ -214,13 +218,13 @@ void parse_program(void)
 
 	expect(TOK_MAIN);
 	expect(TOK_COLON);
-	
+
 	init_subroutine_codegen("main", idpropt(TYPE_CALLABLE, 0, 0, NULL));
 
 	parse_body();
 	gen_1(JVM_RETURN);
 	close_subroutine_codegen(get_variables_width());
-	
+
 	free(class_name);
 	DBG_end("</program>");
 }
@@ -236,10 +240,10 @@ void parse_program(void)
 
 void parse_subdef(void)
 {
-	IDPropt *prop;
-	char	*id, *name;
-	int		 counter, i;
-	ValType *type;
+	IDPropt	 *prop;
+	char	 *id, *name;
+	int		  counter, i;
+	ValType	 *type;
 	Variable *head, *var;
 
 	var = (Variable *)malloc(sizeof(Variable));
@@ -259,7 +263,7 @@ void parse_subdef(void)
 	expect_id(&id);
 	head = NULL;
 
-	var->id = id;
+	var->id	  = id;
 	var->type = *type;
 	var->pos  = position;
 	var->next = NULL;
@@ -281,8 +285,7 @@ void parse_subdef(void)
 		if (head == NULL)
 		{
 			head = newVariable;
-		} else
-		{
+		} else {
 			Variable *current = head;
 			while (current->next != NULL)
 			{
@@ -299,13 +302,22 @@ void parse_subdef(void)
 
 	for (i = 0; i < counter; i++)
 	{
-		prop->params[0] = var->type;
-		var->next = var;
+		prop->params[i] = var->type;
+		var				= var->next;
 	}
-	
-	/*IDPropt* idprop = idpropt(returnType, localVarOffset, numParams, paramTypes);*/
 
-	insert_name(name, prop);
+	/*IDPropt* idprop = idpropt(returnType, localVarOffset, numParams,
+	 * paramTypes);*/
+
+	open_subroutine(name, prop);
+	IDPropt *temp = NULL;
+
+	for (i = 0; i < counter; i++)
+	{
+		temp->type = prop->params[i];
+		insert_name(var->id, temp);
+		var = var->next;
+	}
 
 	expect(TOK_RPAREN);
 
@@ -317,7 +329,11 @@ void parse_subdef(void)
 
 	expect(TOK_COLON);
 
+	init_subroutine_codegen(name, prop);
 	parse_body();
+	close_subroutine_codegen(get_variables_width());
+	close_subroutine();
+
 	DBG_end("</subdef>");
 }
 
@@ -350,23 +366,18 @@ void parse_body(void)
  */
 void parse_type(ValType *type)
 {
-	
-	DBG_start("<type>");
-	if (IS_TYPE(token.type))
-	{
-		if (token.type == TOK_NUM)
-		{
-			*type = TYPE_INTEGER;
 
-		} else
-		{
-			*type = TYPE_BOOLEAN;
-		}
-		get_token(&token);
-	} else
+	DBG_start("<type>");
+
+	if (token.type == TOK_INT)
 	{
-		abort_c(ERR_EXPECTED_TYPE_SPECIFIER);
+		*type = TYPE_INTEGER;
 	}
+	if (token.type == TOK_BOOL)
+	{
+		*type = TYPE_BOOLEAN;
+	}
+	get_token(&token);
 
 	if (token.type == TOK_ARRAY)
 	{
@@ -388,12 +399,12 @@ void parse_vardef(void)
 	ValType type;
 	DBG_start("<vardef>");
 	char *id;
-	
+
 	parse_type(&type);
 	expect_id(&id);
 
 	insert_name(id, idpropt(type, 0, 0, NULL));
-	
+
 	while (token.type == TOK_COMMA)
 	{
 		get_token(&token);
@@ -416,8 +427,7 @@ void parse_statements(void)
 	if (token.type == TOK_CHILLAX)
 	{
 		get_token(&token);
-	} else
-	{
+	} else {
 		parse_statement();
 		while (token.type == TOK_SEMICOLON)
 		{
@@ -486,37 +496,56 @@ void parse_statement(void)
 void parse_assign(void)
 {
 	DBG_start("<assign>");
-	char *id;
-	IDPropt propt;
-	ValType type;
-	
+	char	*id;
+	IDPropt *propt;
+	ValType	 type;
+
 	expect(TOK_LET);
 	expect_id(&id);
-	
+
 	find_name(id, &propt);
-	
-	
+
+	type = propt->type;
 
 	if (token.type == TOK_LBRACK)
 	{
-		parse_index(id);
+		gen_2(JVM_ALOAD, propt->offset);
+		parse_index();
+		SET_BASE_TYPE(type);
 	}
 
 	expect(TOK_EQ);
 
 	if (STARTS_EXPR(token.type))
 	{
+
 		parse_expr(&type);
-	} else if (token.type == TOK_ARRAY)
-	{
+
+		if (IS_ARRAY_TYPE(type))
+		{
+			gen_2(JVM_ASTORE, propt->offset);
+		} else if (IS_ARRAY_TYPE(propt->type)) {
+			gen_1(JVM_IASTORE);
+		} else {
+			gen_2(JVM_ISTORE, propt->offset);
+		}
+	} else if (token.type == TOK_ARRAY) {
 		get_token(&token);
 		parse_simple(&type);
-	} else
-	{
+
+		if (IS_INTEGER_TYPE(type))
+		{
+			gen_newarray(T_INT);
+			gen_2(JVM_ASTORE, propt->offset);
+		} else {
+			gen_newarray(T_BOOLEAN);
+			gen_2(JVM_ASTORE, propt->offset);
+		}
+	} else {
 		abort_c(ERR_EXPECTED_EXPRESSION_OR_ARRAY_ALLOCATION);
 	}
-	gen_2(JVM_LDC, token.value);
-	gen_2(JVM_ISTORE, propt.offset);
+	/*gen_2(JVM_LDC, token.value);
+	gen_2(JVM_ISTORE, propt.offset);*/
 	DBG_end("</assign>");
 }
 
@@ -527,9 +556,9 @@ void parse_call(void)
 {
 	DBG_start("<call>");
 	char *id;
-	IDPropt *prop;
+
 	expect_id(&id);
-	parse_arglist(id, prop);
+	parse_arglist();
 	DBG_end("</call>");
 }
 
@@ -539,19 +568,36 @@ void parse_call(void)
 void parse_if(void)
 {
 	DBG_start("<if>");
+	Label	n, c, end;
 	ValType type;
+	n = get_label();
+	c = get_label();
+
 	expect(TOK_IF);
+
 	parse_expr(&type);
 	expect(TOK_COLON);
+	gen_2_label(JVM_IFEQ, c);
 	parse_statements();
+	gen_2_label(JVM_GOTO, n);
+
+	gen_label(c);
 
 	while (token.type == TOK_ELIF)
 	{
 		DBG_info("<elif>");
 		get_token(&token);
+		end = get_label();
+
 		parse_expr(&type);
+		gen_2_label(JVM_IFEQ, end);
+
 		expect(TOK_COLON);
 		parse_statements();
+
+		gen_2_label(JVM_GOTO, n);
+
+		gen_label(end);
 		DBG_info("</elif>");
 	}
 
@@ -563,6 +609,8 @@ void parse_if(void)
 		parse_statements();
 		DBG_info("</else>");
 	}
+
+	gen_label(n);
 
 	expect(TOK_END);
 	DBG_end("</if>");
@@ -576,16 +624,37 @@ void parse_if(void)
  *
  */
 void parse_input(void)
-{	
-	
+{
 	DBG_start("<input>");
-	char *id;
+	char	*id;
+	IDPropt *p;
+	ValType	 v;
 	expect(TOK_INPUT);
 	expect(TOK_LPAREN);
 	expect_id(&id);
+
+	find_name(id, &p);
+
+	v = p->type;
+
+	if (!(p->type == 5 || p->type == 3))
+	{
+		if (v == TYPE_BOOLEAN || v == TYPE_INTEGER)
+		{
+			gen_read(v);
+			gen_2(JVM_ISTORE, p->offset);
+		}
+	}
+
 	if (token.type == TOK_LBRACK)
 	{
-		parse_index(id);
+
+		gen_2(JVM_ALOAD, p->offset);
+
+		parse_index();
+		gen_read(SET_BASE_TYPE(v));
+
+		gen_1(JVM_IASTORE);
 	}
 
 	expect(TOK_RPAREN);
@@ -599,9 +668,10 @@ void parse_input(void)
  * format. It expects various token types such as TOK_OUTPUT, TOK_LPAREN,
  * TOK_STR, TOK_DOTDOT, and tokens associated with expressions.
  */
-void parse_output(void)
+void parse_output()
 {
 	ValType type;
+
 	DBG_start("<output>");
 
 	expect(TOK_OUTPUT);
@@ -611,19 +681,14 @@ void parse_output(void)
 	{
 		get_token(&token);
 		gen_print_string(token.string);
-	} else if (STARTS_EXPR(token.type))
-	{
+	} else if (STARTS_EXPR(token.type)) {
 		parse_expr(&type);
-		if (type == TYPE_BOOLEAN) {
-			gen_print(TYPE_BOOLEAN);
-		} else {
-			gen_print(TYPE_INTEGER);
-		}
-	} else
-	{
+
+		gen_print(type);
+
+	} else {
 		abort_c(ERR_EXPECTED_EXPRESSION_OR_STRING);
 	}
-	
 
 	while (token.type == TOK_DOTDOT)
 	{
@@ -632,16 +697,10 @@ void parse_output(void)
 		{
 			get_token(&token);
 			gen_print_string(token.string);
-		} else if (STARTS_EXPR(token.type))
-		{
+		} else if (STARTS_EXPR(token.type)) {
 			parse_expr(&type);
-			if (type == TYPE_BOOLEAN) {
-			gen_print(TYPE_BOOLEAN);
+			gen_print(type);
 		} else {
-			gen_print(TYPE_INTEGER);
-		}
-		} else
-		{
 			abort_c(ERR_EXPECTED_EXPRESSION_OR_STRING);
 		}
 	}
@@ -663,6 +722,8 @@ void parse_return(void)
 	{
 		parse_expr(&type);
 	}
+
+	gen_1(JVM_RETURN);
 	DBG_end("</return>");
 }
 
@@ -671,12 +732,23 @@ void parse_return(void)
  */
 void parse_while(void)
 {
+	Label	start, stop;
 	ValType type;
+	start = get_label();
+	stop  = get_label();
+
+	gen_label(start);
+
 	DBG_start("<while>");
 	expect(TOK_WHILE);
 	parse_expr(&type);
+
+	gen_2_label(JVM_IFEQ, stop);
 	expect(TOK_COLON);
 	parse_statements();
+
+	gen_2_label(JVM_GOTO, start);
+	gen_label(stop);
 	expect(TOK_END);
 	DBG_end("</while>");
 }
@@ -687,17 +759,14 @@ void parse_while(void)
  *
  */
 
-void parse_arglist(char *id, IDPropt *propt)
+void parse_arglist()
 {
 	DBG_start("<arglist>");
 	ValType type;
 
 	expect(TOK_LPAREN);
-	
 
 	parse_expr(&type);
-
-	
 
 	while (token.type == TOK_COMMA)
 	{
@@ -715,21 +784,14 @@ void parse_arglist(char *id, IDPropt *propt)
  * Handles the parsing of an index enclosed within square brackets.
  *
  */
-void parse_index(char *id)
+void parse_index()
 {
-	IDPropt *propts;
+	DBG_start("<index>");
 	ValType type;
 
 	expect(TOK_LBRACK);
 
 	parse_simple(&type);
-	
-
-	find_name(id, &propts);
-
-	/*SET_BASE_TYPE(propts->type);*/
-
-	type = propts->type;
 
 	expect(TOK_RBRACK);
 	DBG_end("</index>");
@@ -745,52 +807,50 @@ void parse_index(char *id)
 void parse_expr(ValType *type)
 {
 	DBG_start("<expr>");
+	ValType temp;
 
 	parse_simple(type);
-	
 
 	if (IS_RELOP(token.type))
 	{
-		switch (token.type) {
+		switch (token.type)
+		{
 			case TOK_EQ:
 				get_token(&token);
-				parse_simple(type);
+				parse_simple(&temp);
 				gen_cmp(JVM_IF_ICMPEQ);
 				break;
 			case TOK_GE:
 				get_token(&token);
-				parse_simple(type);
+				parse_simple(&temp);
 				gen_cmp(JVM_IF_ICMPGE);
 				break;
 			case TOK_GT:
 				get_token(&token);
-				parse_simple(type);
+				parse_simple(&temp);
 				gen_cmp(JVM_IF_ICMPGT);
 				break;
 			case TOK_LE:
 				get_token(&token);
-				parse_simple(type);
+				parse_simple(&temp);
 				gen_cmp(JVM_IF_ICMPLE);
 				break;
 			case TOK_LT:
 				get_token(&token);
-				parse_simple(type);
+				parse_simple(&temp);
 				gen_cmp(JVM_IF_ICMPLT);
 				break;
 			case TOK_NE:
 				get_token(&token);
-				parse_simple(type);
+				parse_simple(&temp);
 				gen_cmp(JVM_IF_ICMPNE);
 				break;
 			default:
 				break;
 		}
-		
-	
+
 		*type = TYPE_BOOLEAN;
 	}
-	
-	
 
 	DBG_end("</expr>");
 }
@@ -806,47 +866,41 @@ void parse_expr(ValType *type)
 void parse_simple(ValType *type)
 {
 	DBG_start("<simple>");
-	
-	
+
 	if (token.type == TOK_MINUS)
-	{	
-		
+	{
+
 		get_token(&token);
 		parse_term(type);
 		gen_1(JVM_INEG);
-		
-	} else
-	{
+
+	} else {
 		parse_term(type);
 	}
-		while (IS_ADDOP(token.type))
+	while (IS_ADDOP(token.type))
+	{
+		switch (token.type)
 		{
-			switch (token.type) {
-				case TOK_MINUS: 
+			case TOK_MINUS:
 				get_token(&token);
-					parse_term(type);
-					gen_1(JVM_ISUB);
-					break;
-				case TOK_PLUS:
-					get_token(&token);
-					parse_term(type);
-					gen_1(JVM_IADD);
-					break;
-				case TOK_OR:
+				parse_term(type);
+				gen_1(JVM_ISUB);
+				break;
+			case TOK_PLUS:
 				get_token(&token);
-					parse_term(type);
-					gen_1(JVM_IOR);
-					break;
-				default:
-					break;
-					
-			}
-			
-			
-			
+				parse_term(type);
+				gen_1(JVM_IADD);
+				break;
+			case TOK_OR:
+				get_token(&token);
+				parse_term(type);
+				gen_1(JVM_IOR);
+				break;
+			default:
+				break;
 		}
-		DBG_end("</simple>");
-	
+	}
+	DBG_end("</simple>");
 }
 
 /**
@@ -857,39 +911,36 @@ void parse_simple(ValType *type)
 void parse_term(ValType *type)
 {
 	DBG_start("<term>");
-	
-	parse_factor(type);
 
+	parse_factor(type);
 
 	while (IS_MULOP(token.type))
 	{
-		switch (token.type) {
-			case TOK_MUL: 
-			get_token(&token);
-		parse_factor(type);
+		switch (token.type)
+		{
+			case TOK_MUL:
+				get_token(&token);
+				parse_factor(type);
 				gen_1(JVM_IMUL);
 				break;
 			case TOK_DIV:
-			get_token(&token);
-		parse_factor(type);
+				get_token(&token);
+				parse_factor(type);
 				gen_1(JVM_IDIV);
 				break;
 			case TOK_AND:
-			get_token(&token);
-		parse_factor(type);
+				get_token(&token);
+				parse_factor(type);
 				gen_1(JVM_IAND);
 				break;
 			case TOK_REM:
-			get_token(&token);
-		parse_factor(type);
+				get_token(&token);
+				parse_factor(type);
 				gen_1(JVM_IREM);
 				break;
 			default:
 				break;
-		
 		}
-		
-			
 	}
 	DBG_end("</term>");
 }
@@ -900,31 +951,41 @@ void parse_term(ValType *type)
  */
 void parse_factor(ValType *vt)
 {
-	char *id;
+	char	*id;
 	IDPropt *propt;
 	DBG_start("<factor>");
 	switch (token.type)
 	{
 		case TOK_ID:
 			expect_id(&id);
+
 			find_name(id, &propt);
-			
-			gen_2(JVM_ILOAD, propt->offset);
+
+			*vt = propt->type;
+
 			if (token.type == TOK_LBRACK)
 			{
-				parse_index(id);
-			} else if (token.type == TOK_LPAREN)
-			{
-				parse_arglist(id, propt);
+				SET_BASE_TYPE(*vt);
+				gen_2(JVM_ALOAD, propt->offset);
+				parse_index();
+				gen_1(JVM_IALOAD);
+			} else if (token.type == TOK_LPAREN) {
+
+				parse_arglist();
+				gen_call(id, propt);
+			} else if (IS_ARRAY_TYPE(propt->type)) {
+				gen_2(JVM_ALOAD, propt->offset);
+			} else {
+				gen_2(JVM_ILOAD, propt->offset);
 			}
 			break;
 
 		case TOK_NUM:
-			
+
 			*vt = TYPE_INTEGER;
 			gen_2(JVM_LDC, token.value);
 			get_token(&token);
-			
+
 			break;
 
 		case TOK_LPAREN:
@@ -934,8 +995,7 @@ void parse_factor(ValType *vt)
 			break;
 
 		case TOK_NOT:
-			
-			
+
 			get_token(&token);
 
 			parse_factor(vt);
@@ -945,16 +1005,16 @@ void parse_factor(ValType *vt)
 			break;
 
 		case TOK_TRUE:
-		
+
 			gen_2(JVM_LDC, 1);
 			*vt = TYPE_BOOLEAN;
 			get_token(&token);
 			break;
 
 		case TOK_FALSE:
-		
+
 			gen_2(JVM_LDC, 0);
-			
+
 			*vt = TYPE_BOOLEAN;
 			get_token(&token);
 			break;
@@ -988,8 +1048,7 @@ void chktypes(ValType found, ValType expected, SourcePos *pos, ...)
 		{
 			position = *pos;
 		}
-		leprintf(
-			"incompatible types (expected %s, found %s) %s",
+		leprintf("incompatible types (expected %s, found %s) %s",
 			get_valtype_string(expected),
 			get_valtype_string(found),
 			buf);
@@ -1001,8 +1060,7 @@ void expect(TokenType type)
 	if (token.type == type)
 	{
 		get_token(&token);
-	} else
-	{
+	} else {
 		abort_c(ERR_EXPECT, type);
 	}
 }
@@ -1013,9 +1071,8 @@ void expect_id(char **id)
 	{
 		*id = estrdup(token.lexeme);
 		get_token(&token);
-	} else
-	{
-		
+	} else {
+
 		abort_c(ERR_EXPECT, TOK_ID);
 		eprintf("df");
 	}
@@ -1023,7 +1080,10 @@ void expect_id(char **id)
 
 /* --- constructors --------------------------------------------------------- */
 
-IDPropt *idpropt(ValType type, unsigned int offset, unsigned int nparams, ValType *params)
+/* TODO: Uncomment the following two functions for use during type checking. */
+
+IDPropt *idpropt(ValType type, unsigned int offset, unsigned int nparams,
+ValType*params)
 {
 	IDPropt *ip = emalloc(sizeof(*ip));
 
@@ -1059,8 +1119,7 @@ void _abort_cp(SourcePos *posp, Error err, va_list args)
 		position = *posp;
 	}
 
-	snprintf(
-		expstr,
+	snprintf(expstr,
 		MAX_MSG_LEN,
 		"expected %%s, but found %s",
 		get_token_string(token.type));
@@ -1105,26 +1164,22 @@ void _abort_cp(SourcePos *posp, Error err, va_list args)
 			break;
 
 		case ERR_EXPECTED_TYPE_SPECIFIER:
-			leprintf(
-				"expected type specifier, but found %s",
+			leprintf("expected type specifier, but found %s",
 				get_token_string(token.type));
 			break;
 
 		case ERR_EXPECTED_STATEMENT:
-			leprintf(
-				"expected statement, but found %s",
+			leprintf("expected statement, but found %s",
 				get_token_string(token.type));
 			break;
 
 		case ERR_EXPECTED_EXPRESSION_OR_ARRAY_ALLOCATION:
-			leprintf(
-				"expected expression or array allocation, but found %s",
+			leprintf("expected expression or array allocation, but found %s",
 				get_token_string(token.type));
 			break;
 
 		case ERR_EXPECTED_EXPRESSION_OR_STRING:
-			leprintf(
-				"expected expression or string, but found %s",
+			leprintf("expected expression or string, but found %s",
 				get_token_string(token.type));
 			break;
 
